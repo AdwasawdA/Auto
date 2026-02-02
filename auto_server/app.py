@@ -26,7 +26,7 @@ app = Flask(__name__)
 sock = Sock(app)
 
 # Configuration
-INFERENCE_SERVER_URL = "ws://192.168.1.100:8765"  # Update with your PC IP
+INFERENCE_SERVER_URL = "ws://192.168.50.124:8765"  # Update with your PC IP
 SHOW_BBOX = True
 frame_lock = Lock()
 

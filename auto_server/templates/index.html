@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Car Camera</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .status.connected {
+            background: #28a745;
+        }
+
+        .status.disconnected {
+            background: #dc3545;
+        }
+
+        .video-container {
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .video-container img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .control-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 30px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #28a745;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(30px);
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .metric-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 10px;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #00ff88;
+        }
+
+        .metric-unit {
+            font-size: 1rem;
+            opacity: 0.7;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .metrics {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 Robot Car Camera</h1>
+            <span class="status" id="status">Initializing...</span>
+        </header>
+
+        <div class="video-container">
+            <img id="video-stream" src="/video_feed" alt="Camera Feed">
+        </div>
+
+        <div class="controls">
+            <div class="control-row">
+                <label for="bbox-toggle">Show Bounding Boxes</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="bbox-toggle" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="metrics">
+            <div class="metric-card">
+                <div class="metric-label">Inference Time</div>
+                <div class="metric-value">
+                    <span id="inference-time">0.0</span>
+                    <span class="metric-unit">ms</span>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">Render Time</div>
+                <div class="metric-value">
+                    <span id="render-time">0.0</span>
+                    <span class="metric-unit">ms</span>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-label">Total Latency</div>
+                <div class="metric-value">
+                    <span id="total-latency">0.0</span>
+                    <span class="metric-unit">ms</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const bboxToggle = document.getElementById('bbox-toggle');
+        const statusEl = document.getElementById('status');
+        const inferenceTimeEl = document.getElementById('inference-time');
+        const renderTimeEl = document.getElementById('render-time');
+        const totalLatencyEl = document.getElementById('total-latency');
+
+        // Toggle bounding boxes
+        bboxToggle.addEventListener('change', async (e) => {
+            try {
+                const response = await fetch('/api/toggle_bbox', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ show_bbox: e.target.checked })
+                });
+                const data = await response.json();
+                console.log('BBox toggled:', data);
+            } catch (error) {
+                console.error('Failed to toggle bbox:', error);
+            }
+        });
+
+        // Update metrics periodically
+        async function updateMetrics() {
+            try {
+                const response = await fetch('/api/metrics');
+                const metrics = await response.json();
+                
+                inferenceTimeEl.textContent = metrics.avg_inference_ms.toFixed(1);
+                renderTimeEl.textContent = metrics.avg_render_ms.toFixed(1);
+                totalLatencyEl.textContent = metrics.avg_total_latency_ms.toFixed(1);
+            } catch (error) {
+                console.error('Failed to fetch metrics:', error);
+            }
+        }
+
+        // Update status periodically
+        async function updateStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const status = await response.json();
+                
+                if (status.status === 'running') {
+                    statusEl.className = status.inference_connected ? 
+                        'status connected' : 'status disconnected';
+                    statusEl.textContent = status.inference_connected ? 
+                        '● Connected' : '● Camera Only';
+                    
+                    // Sync bbox toggle with server state
+                    bboxToggle.checked = status.show_bbox;
+                } else {
+                    statusEl.className = 'status disconnected';
+                    statusEl.textContent = '● Initializing';
+                }
+            } catch (error) {
+                statusEl.className = 'status disconnected';
+                statusEl.textContent = '● Error';
+            }
+        }
+
+        // Start periodic updates
+        setInterval(updateMetrics, 500);  // Update metrics every 500ms
+        setInterval(updateStatus, 2000);  // Update status every 2s
+        
+        // Initial update
+        updateStatus();
+        updateMetrics();
+    </script>
+</body>
+</html>

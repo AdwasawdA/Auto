@@ -71,6 +71,7 @@ class CameraCapture:
     
     def _init_camera(self):
         """Initialize camera based on platform"""
+        logger.info("Init_camera...")
         if self.use_picamera:
             try:
                 from picamera2 import Picamera2
