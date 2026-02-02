@@ -138,7 +138,7 @@ class InferenceWebSocketServer:
         self,
         host: str = "0.0.0.0",
         port: int = 8765,
-        model_path: str = "yolov8n.pt",
+        model_path: str = "yolov8l.pt",
         conf_threshold: float = 0.5,
         device: str = "cuda:0"
     ):

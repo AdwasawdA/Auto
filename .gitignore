@@ -201,3 +201,4 @@ dmypy.json
 
 # Cython
 cython_debug/
+*.pt
