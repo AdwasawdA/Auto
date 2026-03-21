@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>CAR CONTROL</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;700;900&display=swap');
+
+  :root {
+    --bg:       #0a0c0f;
+    --surface:  #111418;
+    --border:   #1e2530;
+    --accent:   #00e5ff;
+    --warn:     #ff4444;
+    --text:     #c8d4e0;
+    --dim:      #3a4a5a;
+    --btn-bg:   #141a22;
+    --btn-active: #00e5ff22;
+    --btn-border: #1e3040;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    overflow: hidden;
+    touch-action: none;
+  }
+
+  /* ── top status bar ── */
+  #statusbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: 48px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    z-index: 100;
+  }
+
+  #statusbar .title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900;
+    font-size: 20px;
+    letter-spacing: 4px;
+    color: var(--accent);
+  }
+
+  #conn-indicator {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; letter-spacing: 1px;
+  }
+  #conn-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--warn);
+    box-shadow: 0 0 6px var(--warn);
+    transition: all 0.3s;
+  }
+  #conn-dot.connected { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  #conn-label { color: var(--dim); }
+
+  /* ── center info strip ── */
+  #infostrip {
+    position: fixed;
+    top: 48px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 10px 0;
+    z-index: 90;
+    pointer-events: none;
+  }
+
+  #speed-display {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 52px; font-weight: 900;
+    color: var(--accent);
+    line-height: 1;
+    letter-spacing: -1px;
+  }
+  #speed-unit { font-size: 10px; color: var(--dim); letter-spacing: 2px; }
+
+  #distance-display {
+    font-size: 11px; color: var(--dim); letter-spacing: 1px;
+    margin-top: 2px;
+  }
+  #distance-display span { color: var(--text); }
+
+  /* ── speed slider ── */
+  #speed-row {
+    position: fixed;
+    top: 160px; left: 50%; transform: translateX(-50%);
+    width: 120px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    z-index: 90;
+  }
+  #speed-label { font-size: 9px; color: var(--dim); letter-spacing: 2px; }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    pointer-events: all;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    cursor: pointer;
+  }
+
+  /* ── main control area ── */
+  #controls {
+    position: fixed;
+    top: 48px; left: 0; right: 0; bottom: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* ── shared zone style ── */
+  .zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 40px;
+    gap: 8px;
+  }
+
+  .zone-label {
+    font-size: 9px; letter-spacing: 3px; color: var(--dim);
+    margin-bottom: 4px;
+  }
+
+  /* ── control buttons ── */
+  .ctrl-btn {
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--btn-bg);
+    border: 1px solid var(--btn-border);
+    border-radius: 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.08s, border-color 0.08s, transform 0.08s;
+    -webkit-user-select: none;
+  }
+
+  .ctrl-btn:active, .ctrl-btn.pressed {
+    background: var(--btn-active);
+    border-color: var(--accent);
+    transform: scale(0.95);
+  }
+
+  /* drive buttons — taller */
+  .drive-btn {
+    width: 110px;
+    height: 90px;
+  }
+
+  /* steer buttons — wider */
+  .steer-btn {
+    width: 130px;
+    height: 80px;
+  }
+
+  /* stop button */
+  #btn-stop {
+    width: 90px; height: 90px;
+    border-radius: 50%;
+    border-color: #2a1a1a;
+    position: fixed;
+    bottom: 40px; left: 50%; transform: translateX(-50%);
+    z-index: 95;
+  }
+  #btn-stop:active, #btn-stop.pressed {
+    background: #ff444422;
+    border-color: var(--warn);
+    box-shadow: 0 0 20px #ff444444;
+    transform: translateX(-50%) scale(0.95);
+  }
+
+  /* ── SVG icons ── */
+  .icon { pointer-events: none; }
+
+  /* ── vertical divider ── */
+  #divider {
+    position: fixed;
+    top: 48px; left: 50%;
+    width: 1px; bottom: 0;
+    background: var(--border);
+    pointer-events: none;
+    z-index: 80;
+  }
+
+  /* ── keyboard hint ── */
+  #kb-hint {
+    position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; color: var(--dim); letter-spacing: 1px;
+    pointer-events: none; z-index: 100;
+    white-space: nowrap;
+  }
+
+  /* pulse animation on connect */
+  @keyframes pulse-in {
+    0% { opacity: 0; transform: translateX(-50%) scale(0.9); }
+    100% { opacity: 1; transform: translateX(-50%) scale(1); }
+  }
+</style>
+</head>
+<body>
+
+<!-- Status bar -->
+<div id="statusbar">
+  <div class="title">RC&#x2022;CTRL</div>
+  <div id="conn-indicator">
+    <div id="conn-dot"></div>
+    <span id="conn-label">DISCONNECTED</span>
+  </div>
+</div>
+
+<!-- Center info -->
+<div id="infostrip">
+  <div id="speed-display">0</div>
+  <div id="speed-unit">SPEED %</div>
+  <div id="distance-display">DIST: <span id="dist-val">—</span> cm</div>
+</div>
+
+<!-- Speed slider -->
+<div id="speed-row">
+  <div style="height:110px"></div><!-- spacer below speed display -->
+  <div id="speed-label">SPEED</div>
+  <input type="range" id="speed-slider" min="10" max="100" value="50" step="5">
+</div>
+
+<!-- Vertical divider -->
+<div id="divider"></div>
+
+<!-- Main controls -->
+<div id="controls">
+
+  <!-- LEFT ZONE: Forward / Backward -->
+  <div class="zone" id="zone-drive">
+    <div class="zone-label">DRIVE</div>
+
+    <button class="ctrl-btn drive-btn" id="btn-dopredu" aria-label="Forward">
+      <svg class="icon" width="40" height="40" viewBox="0 0 40 40">
+        <polyline points="8,28 20,12 32,28" fill="none" stroke="#00e5ff" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+      </svg>
+    </button>
+
+    <button class="ctrl-btn drive-btn" id="btn-dozadu" aria-label="Backward">
+      <svg class="icon" width="40" height="40" viewBox="0 0 40 40">
+        <polyline points="8,12 20,28 32,12" fill="none" stroke="#c8d4e0" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- RIGHT ZONE: Left / Right steering -->
+  <div class="zone" id="zone-steer">
+    <div class="zone-label">STEER</div>
+
+    <div style="display:flex; gap:10px;">
+      <button class="ctrl-btn steer-btn" id="btn-dolava" aria-label="Left">
+        <svg class="icon" width="40" height="40" viewBox="0 0 40 40">
+          <polyline points="28,8 12,20 28,32" fill="none" stroke="#00e5ff" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
+      </button>
+
+      <button class="ctrl-btn steer-btn" id="btn-doprava" aria-label="Right">
+        <svg class="icon" width="40" height="40" viewBox="0 0 40 40">
+          <polyline points="12,8 28,20 12,32" fill="none" stroke="#00e5ff" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- STOP button (center bottom) -->
+<button class="ctrl-btn" id="btn-stop" aria-label="Stop">
+  <svg class="icon" width="36" height="36" viewBox="0 0 36 36">
+    <rect x="8" y="8" width="20" height="20" rx="3" fill="#ff4444"/>
+  </svg>
+</button>
+
+<!-- Keyboard hint -->
+<div id="kb-hint">↑↓ DRIVE &nbsp;|&nbsp; ←→ STEER &nbsp;|&nbsp; SPACE STOP</div>
+
+<script>
+// ── WebSocket ────────────────────────────────────────────────────
+const WS_URL = `ws://${location.host}/ws`;
+let ws = null;
+let reconnectTimer = null;
+let speed = 50;
+
+const connDot   = document.getElementById('conn-dot');
+const connLabel = document.getElementById('conn-label');
+const speedDisplay = document.getElementById('speed-display');
+const distVal   = document.getElementById('dist-val');
+const slider    = document.getElementById('speed-slider');
+
+function setConnected(ok) {
+  connDot.className = ok ? 'connected' : '';
+  connLabel.textContent = ok ? 'CONNECTED' : 'DISCONNECTED';
+}
+
+function connect() {
+  if (ws) { try { ws.close(); } catch(e){} }
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    setConnected(true);
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  };
+
+  ws.onclose = ws.onerror = () => {
+    setConnected(false);
+    reconnectTimer = setTimeout(connect, 2000);
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.distance !== undefined && msg.distance !== null) {
+        distVal.textContent = Math.round(msg.distance);
+      }
+    } catch(_) {}
+  };
+}
+
+function send(action, value) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const msg = value !== undefined ? { action, value } : { action };
+  ws.send(JSON.stringify(msg));
+}
+
+// ── Speed slider ─────────────────────────────────────────────────
+slider.addEventListener('input', () => {
+  speed = parseInt(slider.value);
+  speedDisplay.textContent = speed;
+});
+
+// ── Button actions ───────────────────────────────────────────────
+const actions = {
+  'btn-dopredu': () => send('dopredu', speed),
+  'btn-dozadu':  () => send('dozadu',  speed),
+  'btn-dolava':  () => { send('dolava',  60); },
+  'btn-doprava': () => { send('doprava', 60); },
+  'btn-stop':    () => send('stop'),
+};
+
+const releaseActions = {
+  'btn-dopredu': () => send('stop'),
+  'btn-dozadu':  () => send('stop'),
+  'btn-dolava':  () => send('rovno'),
+  'btn-doprava': () => send('rovno'),
+};
+
+// Attach touch + mouse events
+Object.keys(actions).forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  const press = (e) => {
+    e.preventDefault();
+    el.classList.add('pressed');
+    actions[id]();
+  };
+  const release = (e) => {
+    e.preventDefault();
+    el.classList.remove('pressed');
+    if (releaseActions[id]) releaseActions[id]();
+  };
+
+  el.addEventListener('touchstart',  press,   { passive: false });
+  el.addEventListener('touchend',    release, { passive: false });
+  el.addEventListener('touchcancel', release, { passive: false });
+  el.addEventListener('mousedown',   press);
+  el.addEventListener('mouseup',     release);
+  el.addEventListener('mouseleave',  release);
+});
+
+// ── Keyboard support ─────────────────────────────────────────────
+const keyMap = {
+  'ArrowUp':    { press: () => send('dopredu', speed), release: () => send('stop'),  btnId: 'btn-dopredu' },
+  'ArrowDown':  { press: () => send('dozadu',  speed), release: () => send('stop'),  btnId: 'btn-dozadu'  },
+  'ArrowLeft':  { press: () => send('dolava',  60),    release: () => send('rovno'), btnId: 'btn-dolava'  },
+  'ArrowRight': { press: () => send('doprava', 60),    release: () => send('rovno'), btnId: 'btn-doprava' },
+  ' ':          { press: () => send('stop'),           release: () => {},            btnId: 'btn-stop'    },
+};
+
+const heldKeys = new Set();
+
+document.addEventListener('keydown', (e) => {
+  if (heldKeys.has(e.key)) return; // prevent repeat
+  const k = keyMap[e.key];
+  if (!k) return;
+  e.preventDefault();
+  heldKeys.add(e.key);
+  document.getElementById(k.btnId)?.classList.add('pressed');
+  k.press();
+});
+
+document.addEventListener('keyup', (e) => {
+  const k = keyMap[e.key];
+  if (!k) return;
+  e.preventDefault();
+  heldKeys.delete(e.key);
+  document.getElementById(k.btnId)?.classList.remove('pressed');
+  k.release();
+});
+
+// ── Distance polling ─────────────────────────────────────────────
+setInterval(() => send('vzdialenost'), 2000);
+
+// ── Init ─────────────────────────────────────────────────────────
+connect();
+speedDisplay.textContent = speed;
+</script>
+</body>
+</html>

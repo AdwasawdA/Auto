@@ -254,7 +254,7 @@ def api_status():
 
 def run_flask_app():
     """Run Flask application"""
-    app.run(host='0.0.0.0', port=5000, threaded=True, debug=False)
+    app.run(host='0.0.0.0', port=5050, threaded=True, debug=False)
 
 
 async def main():

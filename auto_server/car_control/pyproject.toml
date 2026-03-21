@@ -1,0 +1,30 @@
+[project]
+name = "car-control"
+version = "0.1.0"
+description = "WebSocket car control server for Raspberry Pi 4"
+requires-python = ">=3.10"
+
+dependencies = [
+    "flask>=3.0",
+    "flask-sock>=0.7",
+]
+
+[project.optional-dependencies]
+rpi = [
+    "RPi.GPIO>=0.7",
+    "adafruit-circuitpython-pca9685>=3.4",
+    "adafruit-circuitpython-motor>=3.4",
+    "adafruit-circuitpython-vl53l0x>=3.6",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["server"]
+omit = ["tests/*", "pohyb2.py", "car_setup.py"]
