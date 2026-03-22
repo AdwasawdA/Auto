@@ -1,427 +1,525 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>CAR CONTROL</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;700;900&display=swap');
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>RC·CAM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    /* ── Reset ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  :root {
-    --bg:       #0a0c0f;
-    --surface:  #111418;
-    --border:   #1e2530;
-    --accent:   #00e5ff;
-    --warn:     #ff4444;
-    --text:     #c8d4e0;
-    --dim:      #3a4a5a;
-    --btn-bg:   #141a22;
-    --btn-active: #00e5ff22;
-    --btn-border: #1e3040;
-  }
+    /* ── Design tokens ──────────────────────────────────── */
+    :root {
+      --bg:      #0a0c0f;
+      --surface: #111318;
+      --border:  #1e2229;
+      --accent:  #00e5ff;
+      --warn:    #ff4444;
+      --dim:     #4a5568;
+      --text:    #c8d6e5;
+      --status-h:  48px;
+      --metrics-h: 72px;
+    }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      height: 100%; width: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      touch-action: none;
+    }
 
-  html, body {
-    width: 100%; height: 100%;
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Share Tech Mono', monospace;
-    overflow: hidden;
-    touch-action: none;
-  }
+    /* ── Status bar ─────────────────────────────────────── */
+    #statusbar {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: var(--status-h);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      z-index: 100;
+      gap: 12px;
+    }
 
-  /* ── top status bar ── */
-  #statusbar {
-    position: fixed; top: 0; left: 0; right: 0;
-    height: 48px;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 16px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    z-index: 100;
-  }
+    .title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 900; font-size: 20px;
+      letter-spacing: 4px; color: var(--accent);
+      white-space: nowrap;
+    }
 
-  #statusbar .title {
-    font-family: 'Barlow Condensed', sans-serif;
-    font-weight: 900;
-    font-size: 20px;
-    letter-spacing: 4px;
-    color: var(--accent);
-  }
+    .conn-group {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; letter-spacing: 1px; color: var(--dim);
+    }
 
-  #conn-indicator {
-    display: flex; align-items: center; gap: 8px;
-    font-size: 11px; letter-spacing: 1px;
-  }
-  #conn-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: var(--warn);
-    box-shadow: 0 0 6px var(--warn);
-    transition: all 0.3s;
-  }
-  #conn-dot.connected { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-  #conn-label { color: var(--dim); }
+    .conn-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--warn);
+      box-shadow: 0 0 6px var(--warn);
+      transition: background 0.3s, box-shadow 0.3s;
+      flex-shrink: 0;
+    }
+    .conn-dot.connected {
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
 
-  /* ── center info strip ── */
-  #infostrip {
-    position: fixed;
-    top: 48px; left: 50%; transform: translateX(-50%);
-    display: flex; flex-direction: column; align-items: center; gap: 4px;
-    padding: 10px 0;
-    z-index: 90;
-    pointer-events: none;
-  }
+    .status-center {
+      display: flex; align-items: center; gap: 16px;
+    }
 
-  #speed-display {
-    font-family: 'Barlow Condensed', sans-serif;
-    font-size: 52px; font-weight: 900;
-    color: var(--accent);
-    line-height: 1;
-    letter-spacing: -1px;
-  }
-  #speed-unit { font-size: 10px; color: var(--dim); letter-spacing: 2px; }
+    .bbox-wrap {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; letter-spacing: 1px; color: var(--dim);
+      cursor: pointer;
+    }
 
-  #distance-display {
-    font-size: 11px; color: var(--dim); letter-spacing: 1px;
-    margin-top: 2px;
-  }
-  #distance-display span { color: var(--text); }
+    /* Toggle switch */
+    .toggle-switch {
+      position: relative; display: inline-block;
+      width: 44px; height: 24px; flex-shrink: 0;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-track {
+      position: absolute; inset: 0;
+      background: var(--dim); border-radius: 24px;
+      cursor: pointer; transition: background 0.3s;
+    }
+    .toggle-track::before {
+      content: ''; position: absolute;
+      width: 18px; height: 18px; left: 3px; top: 3px;
+      background: var(--surface); border-radius: 50%;
+      transition: transform 0.3s;
+    }
+    .toggle-switch input:checked + .toggle-track { background: var(--accent); }
+    .toggle-switch input:checked + .toggle-track::before { transform: translateX(20px); }
 
-  /* ── speed slider ── */
-  #speed-row {
-    position: fixed;
-    top: 160px; left: 50%; transform: translateX(-50%);
-    width: 120px;
-    display: flex; flex-direction: column; align-items: center; gap: 4px;
-    z-index: 90;
-  }
-  #speed-label { font-size: 9px; color: var(--dim); letter-spacing: 2px; }
+    /* ── Main grid ──────────────────────────────────────── */
+    #main-grid {
+      position: fixed;
+      top: var(--status-h);
+      bottom: var(--metrics-h);
+      left: 0; right: 0;
+      display: grid;
+      grid-template-columns: 200px 1fr 220px;
+    }
 
-  input[type=range] {
-    -webkit-appearance: none;
-    width: 100%; height: 4px;
-    background: var(--border);
-    border-radius: 2px;
-    outline: none;
-    pointer-events: all;
-    cursor: pointer;
-  }
-  input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 18px; height: 18px;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 8px var(--accent);
-    cursor: pointer;
-  }
+    /* ── Speed panel (left) ─────────────────────────────── */
+    #panel-speed {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 14px; padding: 16px;
+      border-right: 1px solid var(--border);
+    }
 
-  /* ── main control area ── */
-  #controls {
-    position: fixed;
-    top: 48px; left: 0; right: 0; bottom: 0;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
+    .panel-label {
+      font-size: 9px; letter-spacing: 3px; color: var(--dim);
+    }
 
-  /* ── shared zone style ── */
-  .zone {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-end;
-    padding-bottom: 40px;
-    gap: 8px;
-  }
+    #speed-display {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 900; font-size: 72px;
+      color: var(--accent); line-height: 1; letter-spacing: -2px;
+    }
 
-  .zone-label {
-    font-size: 9px; letter-spacing: 3px; color: var(--dim);
-    margin-bottom: 4px;
-  }
+    #speed-unit {
+      font-size: 10px; letter-spacing: 2px; color: var(--dim);
+      margin-top: -8px;
+    }
 
-  /* ── control buttons ── */
-  .ctrl-btn {
-    position: relative;
-    display: flex; align-items: center; justify-content: center;
-    background: var(--btn-bg);
-    border: 1px solid var(--btn-border);
-    border-radius: 12px;
-    cursor: pointer;
-    user-select: none;
-    transition: background 0.08s, border-color 0.08s, transform 0.08s;
-    -webkit-user-select: none;
-  }
+    /* Range slider */
+    input[type=range] {
+      -webkit-appearance: none; appearance: none;
+      width: 140px; height: 4px;
+      background: var(--border); border-radius: 2px; outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--accent); cursor: pointer;
+      box-shadow: 0 0 8px var(--accent);
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--accent); cursor: pointer; border: none;
+    }
 
-  .ctrl-btn:active, .ctrl-btn.pressed {
-    background: var(--btn-active);
-    border-color: var(--accent);
-    transform: scale(0.95);
-  }
+    #dist-display {
+      font-size: 11px; color: var(--dim); letter-spacing: 1px;
+      margin-top: 4px;
+    }
+    #dist-val { color: var(--text); }
 
-  /* drive buttons — taller */
-  .drive-btn {
-    width: 110px;
-    height: 90px;
-  }
+    /* ── Video panel (center) ───────────────────────────── */
+    #panel-video {
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden; background: var(--bg); padding: 12px;
+    }
 
-  /* steer buttons — wider */
-  .steer-btn {
-    width: 130px;
-    height: 80px;
-  }
+    .video-wrap {
+      width: 100%; max-width: 640px;
+      border: 1px solid var(--border); border-radius: 8px;
+      overflow: hidden; background: #000;
+    }
+    .video-wrap img { width: 100%; height: auto; display: block; }
 
-  /* stop button */
-  #btn-stop {
-    width: 90px; height: 90px;
-    border-radius: 50%;
-    border-color: #2a1a1a;
-    position: fixed;
-    bottom: 40px; left: 50%; transform: translateX(-50%);
-    z-index: 95;
-  }
-  #btn-stop:active, #btn-stop.pressed {
-    background: #ff444422;
-    border-color: var(--warn);
-    box-shadow: 0 0 20px #ff444444;
-    transform: translateX(-50%) scale(0.95);
-  }
+    /* ── Directional panel (right) ──────────────────────── */
+    #panel-dir {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px; padding: 16px;
+      border-left: 1px solid var(--border);
+    }
 
-  /* ── SVG icons ── */
-  .icon { pointer-events: none; }
+    .dir-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 72px);
+      grid-template-rows: repeat(3, 72px);
+      gap: 8px;
+    }
 
-  /* ── vertical divider ── */
-  #divider {
-    position: fixed;
-    top: 48px; left: 50%;
-    width: 1px; bottom: 0;
-    background: var(--border);
-    pointer-events: none;
-    z-index: 80;
-  }
+    /* Control buttons */
+    .ctrl-btn {
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border); border-radius: 10px;
+      background: var(--surface); color: var(--text);
+      cursor: pointer; user-select: none;
+      transition: background 0.1s, border-color 0.1s, transform 0.08s;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+    }
+    .ctrl-btn:active, .ctrl-btn.pressed {
+      background: #1a2a2a; border-color: var(--accent);
+      transform: scale(0.93);
+    }
+    .ctrl-btn svg { width: 28px; height: 28px; fill: var(--accent); pointer-events: none; }
 
-  /* ── keyboard hint ── */
-  #kb-hint {
-    position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%);
-    font-size: 9px; color: var(--dim); letter-spacing: 1px;
-    pointer-events: none; z-index: 100;
-    white-space: nowrap;
-  }
+    #btn-dopredu { grid-column: 2; grid-row: 1; }
+    #btn-dolava  { grid-column: 1; grid-row: 2; }
+    #btn-stop    { grid-column: 2; grid-row: 2; border-radius: 50%; border-color: #2a1a1a; }
+    #btn-stop svg { fill: var(--warn); width: 32px; height: 32px; }
+    #btn-stop:active, #btn-stop.pressed {
+      background: #1a1010; border-color: var(--warn);
+      transform: scale(0.93);
+    }
+    #btn-doprava { grid-column: 3; grid-row: 2; }
+    #btn-dozadu  { grid-column: 2; grid-row: 3; }
 
-  /* pulse animation on connect */
-  @keyframes pulse-in {
-    0% { opacity: 0; transform: translateX(-50%) scale(0.9); }
-    100% { opacity: 1; transform: translateX(-50%) scale(1); }
-  }
-</style>
+    #kb-hint {
+      font-size: 9px; letter-spacing: 1px; color: var(--dim);
+      text-align: center; line-height: 1.6;
+    }
+
+    /* ── Metrics bar (bottom) ───────────────────────────── */
+    #metrics-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      height: var(--metrics-h);
+      display: flex; align-items: stretch;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      z-index: 100;
+    }
+
+    .metric-card {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 2px;
+      border-right: 1px solid var(--border);
+    }
+    .metric-card:last-child { border-right: none; }
+
+    .metric-label {
+      font-size: 9px; letter-spacing: 2px; color: var(--dim);
+    }
+    .metric-value {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700; font-size: 28px; color: var(--accent);
+      line-height: 1;
+    }
+    .metric-unit {
+      font-size: 10px; color: var(--dim); margin-left: 2px;
+    }
+
+    /* ── Responsive: narrow screens ─────────────────────── */
+    @media (max-width: 700px) {
+      #main-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr auto;
+      }
+      #panel-speed {
+        flex-direction: row; flex-wrap: wrap;
+        justify-content: space-around;
+        border-right: none; border-bottom: 1px solid var(--border);
+        padding: 8px; gap: 8px;
+      }
+      #panel-dir {
+        border-left: none; border-top: 1px solid var(--border);
+        padding: 8px;
+      }
+    }
+  </style>
 </head>
 <body>
 
-<!-- Status bar -->
-<div id="statusbar">
-  <div class="title">RC&#x2022;CTRL</div>
-  <div id="conn-indicator">
-    <div id="conn-dot"></div>
-    <span id="conn-label">DISCONNECTED</span>
-  </div>
-</div>
+  <!-- ── Status bar ─────────────────────────────────── -->
+  <header id="statusbar">
+    <span class="title">RC·CAM</span>
 
-<!-- Center info -->
-<div id="infostrip">
-  <div id="speed-display">0</div>
-  <div id="speed-unit">SPEED %</div>
-  <div id="distance-display">DIST: <span id="dist-val">—</span> cm</div>
-</div>
-
-<!-- Speed slider -->
-<div id="speed-row">
-  <div style="height:110px"></div><!-- spacer below speed display -->
-  <div id="speed-label">SPEED</div>
-  <input type="range" id="speed-slider" min="10" max="100" value="50" step="5">
-</div>
-
-<!-- Vertical divider -->
-<div id="divider"></div>
-
-<!-- Main controls -->
-<div id="controls">
-
-  <!-- LEFT ZONE: Forward / Backward -->
-  <div class="zone" id="zone-drive">
-    <div class="zone-label">DRIVE</div>
-
-    <button class="ctrl-btn drive-btn" id="btn-dopredu" aria-label="Forward">
-      <svg class="icon" width="40" height="40" viewBox="0 0 40 40">
-        <polyline points="8,28 20,12 32,28" fill="none" stroke="#00e5ff" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-      </svg>
-    </button>
-
-    <button class="ctrl-btn drive-btn" id="btn-dozadu" aria-label="Backward">
-      <svg class="icon" width="40" height="40" viewBox="0 0 40 40">
-        <polyline points="8,12 20,28 32,12" fill="none" stroke="#c8d4e0" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-      </svg>
-    </button>
-  </div>
-
-  <!-- RIGHT ZONE: Left / Right steering -->
-  <div class="zone" id="zone-steer">
-    <div class="zone-label">STEER</div>
-
-    <div style="display:flex; gap:10px;">
-      <button class="ctrl-btn steer-btn" id="btn-dolava" aria-label="Left">
-        <svg class="icon" width="40" height="40" viewBox="0 0 40 40">
-          <polyline points="28,8 12,20 28,32" fill="none" stroke="#00e5ff" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-        </svg>
-      </button>
-
-      <button class="ctrl-btn steer-btn" id="btn-doprava" aria-label="Right">
-        <svg class="icon" width="40" height="40" viewBox="0 0 40 40">
-          <polyline points="12,8 28,20 12,32" fill="none" stroke="#00e5ff" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-        </svg>
-      </button>
+    <div class="status-center">
+      <div class="conn-group">
+        <div class="conn-dot" id="conn-dot"></div>
+        <span id="conn-label">RC: OFF</span>
+      </div>
+      <div class="conn-group">
+        <div class="conn-dot" id="infer-dot"></div>
+        <span id="infer-label">INFER: OFF</span>
+      </div>
     </div>
-  </div>
-</div>
 
-<!-- STOP button (center bottom) -->
-<button class="ctrl-btn" id="btn-stop" aria-label="Stop">
-  <svg class="icon" width="36" height="36" viewBox="0 0 36 36">
-    <rect x="8" y="8" width="20" height="20" rx="3" fill="#ff4444"/>
-  </svg>
-</button>
+    <label class="bbox-wrap">
+      <span>BBOX</span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="bbox-toggle" checked>
+        <span class="toggle-track"></span>
+      </label>
+    </label>
+  </header>
 
-<!-- Keyboard hint -->
-<div id="kb-hint">↑↓ DRIVE &nbsp;|&nbsp; ←→ STEER &nbsp;|&nbsp; SPACE STOP</div>
+  <!-- ── Main 3-column grid ─────────────────────────── -->
+  <main id="main-grid">
 
-<script>
-// ── WebSocket ────────────────────────────────────────────────────
-const WS_URL = `ws://${location.host}/ws`;
-let ws = null;
-let reconnectTimer = null;
-let speed = 50;
+    <!-- Left: speed controls -->
+    <section id="panel-speed">
+      <div class="panel-label">SPEED</div>
+      <div id="speed-display">0</div>
+      <div id="speed-unit">SPEED %</div>
+      <input type="range" id="speed-slider" min="0" max="100" value="0" step="2">
+      <div id="dist-display">DIST: <span id="dist-val">—</span> mm</div>
+    </section>
 
-const connDot   = document.getElementById('conn-dot');
-const connLabel = document.getElementById('conn-label');
-const speedDisplay = document.getElementById('speed-display');
-const distVal   = document.getElementById('dist-val');
-const slider    = document.getElementById('speed-slider');
+    <!-- Center: video feed -->
+    <section id="panel-video">
+      <div class="video-wrap">
+        <img id="video-stream" src="/video_feed" alt="Camera Feed">
+      </div>
+    </section>
 
-function setConnected(ok) {
-  connDot.className = ok ? 'connected' : '';
-  connLabel.textContent = ok ? 'CONNECTED' : 'DISCONNECTED';
-}
+    <!-- Right: directional controls -->
+    <section id="panel-dir">
+      <div class="panel-label">CONTROLS</div>
+      <div class="dir-grid">
+        <button class="ctrl-btn" id="btn-dopredu" aria-label="Forward">
+          <svg viewBox="0 0 24 24"><path d="M12 4l-8 8h5v8h6v-8h5z"/></svg>
+        </button>
+        <button class="ctrl-btn" id="btn-dolava" aria-label="Left">
+          <svg viewBox="0 0 24 24"><path d="M4 12l8 8v-5h8v-6h-8V4z"/></svg>
+        </button>
+        <button class="ctrl-btn" id="btn-stop" aria-label="Stop">
+          <svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+        </button>
+        <button class="ctrl-btn" id="btn-doprava" aria-label="Right">
+          <svg viewBox="0 0 24 24"><path d="M20 12l-8-8v5H4v6h8v5z"/></svg>
+        </button>
+        <button class="ctrl-btn" id="btn-dozadu" aria-label="Backward">
+          <svg viewBox="0 0 24 24"><path d="M12 20l8-8h-5V4H9v8H4z"/></svg>
+        </button>
+      </div>
+      <div id="kb-hint">↑↓ DRIVE | ←→ STEER<br>SPACE STOP</div>
+    </section>
 
-function connect() {
-  if (ws) { try { ws.close(); } catch(e){} }
-  ws = new WebSocket(WS_URL);
+  </main>
 
-  ws.onopen = () => {
-    setConnected(true);
-    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-  };
+  <!-- ── Metrics bar ────────────────────────────────── -->
+  <footer id="metrics-bar">
+    <div class="metric-card">
+      <div class="metric-label">INFERENCE</div>
+      <div class="metric-value"><span id="inference-time">0.0</span><span class="metric-unit">ms</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">RENDER</div>
+      <div class="metric-value"><span id="render-time">0.0</span><span class="metric-unit">ms</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">LATENCY</div>
+      <div class="metric-value"><span id="total-latency">0.0</span><span class="metric-unit">ms</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">DISTANCE</div>
+      <div class="metric-value"><span id="dist-metric">—</span><span class="metric-unit">mm</span></div>
+    </div>
+  </footer>
 
-  ws.onclose = ws.onerror = () => {
-    setConnected(false);
-    reconnectTimer = setTimeout(connect, 2000);
-  };
+  <script>
+    // ── DOM refs ────────────────────────────────────────
+    const connDot         = document.getElementById('conn-dot');
+    const connLabel       = document.getElementById('conn-label');
+    const inferDot        = document.getElementById('infer-dot');
+    const inferLabel      = document.getElementById('infer-label');
+    const bboxToggle      = document.getElementById('bbox-toggle');
+    const speedDisplay    = document.getElementById('speed-display');
+    const speedSlider     = document.getElementById('speed-slider');
+    const distVal         = document.getElementById('dist-val');
+    const distMetric      = document.getElementById('dist-metric');
+    const inferenceTimeEl = document.getElementById('inference-time');
+    const renderTimeEl    = document.getElementById('render-time');
+    const totalLatencyEl  = document.getElementById('total-latency');
 
-  ws.onmessage = (e) => {
-    try {
-      const msg = JSON.parse(e.data);
-      if (msg.distance !== undefined && msg.distance !== null) {
-        distVal.textContent = Math.round(msg.distance);
+    // ── State ───────────────────────────────────────────
+    let ws = null;
+    let reconnectTimer = null;
+    let speed = 50;
+
+    // ── WebSocket ───────────────────────────────────────
+    function setRCConnected(ok) {
+      connDot.className = 'conn-dot' + (ok ? ' connected' : '');
+      connLabel.textContent = ok ? 'RC' : 'RC: OFF';
+    }
+
+    function connect() {
+      if (ws) { try { ws.close(); } catch(_) {} }
+      ws = new WebSocket(`ws://${location.host}/ws`);
+
+      ws.onopen = () => {
+        setRCConnected(true);
+        clearTimeout(reconnectTimer);
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.distance !== undefined && msg.distance !== null) {
+            const v = Math.round(msg.distance);
+            distVal.textContent    = v;
+            distMetric.textContent = v;
+          }
+        } catch(_) {}
+      };
+
+      ws.onclose = ws.onerror = () => {
+        setRCConnected(false);
+        reconnectTimer = setTimeout(connect, 2000);
+      };
+    }
+
+    function send(action, value) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const payload = { action };
+      if (value !== undefined) payload.value = value;
+      ws.send(JSON.stringify(payload));
+    }
+
+    // ── Speed slider ────────────────────────────────────
+    speedSlider.addEventListener('input', () => {
+      speed = parseInt(speedSlider.value);
+      speedDisplay.textContent = speed;
+    });
+
+    // ── Button actions ──────────────────────────────────
+    const actions = {
+      'btn-dopredu': () => send('dopredu', speed),
+      'btn-dozadu':  () => send('dozadu',  speed),
+      'btn-dolava':  () => send('dolava',  60),
+      'btn-doprava': () => send('doprava', 60),
+      'btn-stop':    () => send('stop'),
+    };
+    const releaseActions = {
+      'btn-dopredu': () => send('stop'),
+      'btn-dozadu':  () => send('stop'),
+      'btn-dolava':  () => send('rovno'),
+      'btn-doprava': () => send('rovno'),
+    };
+
+    Object.keys(actions).forEach(id => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+
+      const press   = () => { btn.classList.add('pressed');    actions[id](); };
+      const release = () => {
+        btn.classList.remove('pressed');
+        if (releaseActions[id]) releaseActions[id]();
+      };
+
+      btn.addEventListener('touchstart',  e => { e.preventDefault(); press(); },   { passive: false });
+      btn.addEventListener('touchend',    e => { e.preventDefault(); release(); }, { passive: false });
+      btn.addEventListener('touchcancel', e => { e.preventDefault(); release(); }, { passive: false });
+      btn.addEventListener('mousedown',  press);
+      btn.addEventListener('mouseup',    release);
+      btn.addEventListener('mouseleave', release);
+    });
+
+    // ── Keyboard ────────────────────────────────────────
+    const keyMap = {
+      'ArrowUp':    { press: () => send('dopredu', speed), release: () => send('stop') },
+      'ArrowDown':  { press: () => send('dozadu',  speed), release: () => send('stop') },
+      'ArrowLeft':  { press: () => send('dolava',  60),    release: () => send('rovno') },
+      'ArrowRight': { press: () => send('doprava', 60),    release: () => send('rovno') },
+      ' ':          { press: () => send('stop'),           release: null },
+    };
+    const heldKeys = new Set();
+
+    document.addEventListener('keydown', e => {
+      if (!keyMap[e.key] || heldKeys.has(e.key)) return;
+      e.preventDefault();
+      heldKeys.add(e.key);
+      keyMap[e.key].press();
+    });
+    document.addEventListener('keyup', e => {
+      if (!keyMap[e.key]) return;
+      heldKeys.delete(e.key);
+      if (keyMap[e.key].release) keyMap[e.key].release();
+    });
+
+    // ── BBox toggle ─────────────────────────────────────
+    bboxToggle.addEventListener('change', async (e) => {
+      try {
+        await fetch('/api/toggle_bbox', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ show_bbox: e.target.checked })
+        });
+      } catch(err) { console.error('Failed to toggle bbox:', err); }
+    });
+
+    // ── Metrics polling ─────────────────────────────────
+    async function updateMetrics() {
+      try {
+        const r = await fetch('/api/metrics');
+        const m = await r.json();
+        inferenceTimeEl.textContent = (m.avg_inference_ms     || 0).toFixed(1);
+        renderTimeEl.textContent    = (m.avg_render_ms        || 0).toFixed(1);
+        totalLatencyEl.textContent  = (m.avg_total_latency_ms || 0).toFixed(1);
+      } catch(_) {}
+    }
+    setInterval(updateMetrics, 500);
+
+    // ── Status polling ──────────────────────────────────
+    async function updateStatus() {
+      try {
+        const r = await fetch('/api/status');
+        const s = await r.json();
+        const inferOk = s.inference_connected;
+        inferDot.className     = 'conn-dot' + (inferOk ? ' connected' : '');
+        inferLabel.textContent = inferOk ? 'INFER' : 'INFER: OFF';
+        bboxToggle.checked     = !!s.show_bbox;
+      } catch(_) {
+        inferDot.className     = 'conn-dot';
+        inferLabel.textContent = 'INFER: ERR';
       }
-    } catch(_) {}
-  };
-}
+    }
+    setInterval(updateStatus, 2000);
 
-function send(action, value) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  const msg = value !== undefined ? { action, value } : { action };
-  ws.send(JSON.stringify(msg));
-}
+    // ── Distance via WebSocket ──────────────────────────
+    setInterval(() => send('vzdialenost'), 2000);
 
-// ── Speed slider ─────────────────────────────────────────────────
-slider.addEventListener('input', () => {
-  speed = parseInt(slider.value);
-  speedDisplay.textContent = speed;
-});
-
-// ── Button actions ───────────────────────────────────────────────
-const actions = {
-  'btn-dopredu': () => send('dopredu', speed),
-  'btn-dozadu':  () => send('dozadu',  speed),
-  'btn-dolava':  () => { send('dolava',  60); },
-  'btn-doprava': () => { send('doprava', 60); },
-  'btn-stop':    () => send('stop'),
-};
-
-const releaseActions = {
-  'btn-dopredu': () => send('stop'),
-  'btn-dozadu':  () => send('stop'),
-  'btn-dolava':  () => send('rovno'),
-  'btn-doprava': () => send('rovno'),
-};
-
-// Attach touch + mouse events
-Object.keys(actions).forEach(id => {
-  const el = document.getElementById(id);
-  if (!el) return;
-
-  const press = (e) => {
-    e.preventDefault();
-    el.classList.add('pressed');
-    actions[id]();
-  };
-  const release = (e) => {
-    e.preventDefault();
-    el.classList.remove('pressed');
-    if (releaseActions[id]) releaseActions[id]();
-  };
-
-  el.addEventListener('touchstart',  press,   { passive: false });
-  el.addEventListener('touchend',    release, { passive: false });
-  el.addEventListener('touchcancel', release, { passive: false });
-  el.addEventListener('mousedown',   press);
-  el.addEventListener('mouseup',     release);
-  el.addEventListener('mouseleave',  release);
-});
-
-// ── Keyboard support ─────────────────────────────────────────────
-const keyMap = {
-  'ArrowUp':    { press: () => send('dopredu', speed), release: () => send('stop'),  btnId: 'btn-dopredu' },
-  'ArrowDown':  { press: () => send('dozadu',  speed), release: () => send('stop'),  btnId: 'btn-dozadu'  },
-  'ArrowLeft':  { press: () => send('dolava',  60),    release: () => send('rovno'), btnId: 'btn-dolava'  },
-  'ArrowRight': { press: () => send('doprava', 60),    release: () => send('rovno'), btnId: 'btn-doprava' },
-  ' ':          { press: () => send('stop'),           release: () => {},            btnId: 'btn-stop'    },
-};
-
-const heldKeys = new Set();
-
-document.addEventListener('keydown', (e) => {
-  if (heldKeys.has(e.key)) return; // prevent repeat
-  const k = keyMap[e.key];
-  if (!k) return;
-  e.preventDefault();
-  heldKeys.add(e.key);
-  document.getElementById(k.btnId)?.classList.add('pressed');
-  k.press();
-});
-
-document.addEventListener('keyup', (e) => {
-  const k = keyMap[e.key];
-  if (!k) return;
-  e.preventDefault();
-  heldKeys.delete(e.key);
-  document.getElementById(k.btnId)?.classList.remove('pressed');
-  k.release();
-});
-
-// ── Distance polling ─────────────────────────────────────────────
-setInterval(() => send('vzdialenost'), 2000);
-
-// ── Init ─────────────────────────────────────────────────────────
-connect();
-speedDisplay.textContent = speed;
-</script>
+    // ── Init ────────────────────────────────────────────
+    connect();
+    updateStatus();
+    updateMetrics();
+  </script>
 </body>
 </html>
