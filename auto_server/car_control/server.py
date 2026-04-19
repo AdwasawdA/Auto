@@ -47,7 +47,7 @@ auto = None
 auto_lock = threading.Lock()
 
 # Configuration
-INFERENCE_SERVER_URL = "ws://192.168.50.124:8765"  # Update with your PC IP
+INFERENCE_SERVER_URL = "ws://10.42.0.168:8765"  # Update with your PC IP
 SHOW_BBOX = True
 frame_lock = Lock()
 
@@ -62,7 +62,7 @@ def handle_command(data: dict) -> dict:
     Returns a dict that is sent back to the client as JSON.
     """
     action = data.get("action")
-    value = data.get("value", 20)  # default speed/steering 50%
+    value = data.get("value", 10)  # default speed/steering 50%
 
     try:
         if action == "dopredu":

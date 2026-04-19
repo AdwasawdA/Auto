@@ -45,7 +45,7 @@ class FrameMetrics:
 class CameraCapture:
     """Camera capture handler - works with PiCamera2 or USB camera"""
     
-    def __init__(self, resolution=(1280, 720), fps=20, use_picamera=True):
+    def __init__(self, resolution=(640, 480), fps=20, use_picamera=True):
         """
         Initialize camera
         
@@ -108,8 +108,8 @@ class CameraCapture:
         try:
             if self.use_picamera:
                 frame = self.camera.capture_array()
-                # PiCamera2 returns RGB, convert to BGR for OpenCV consistency
-                return cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                # PiCamera2 returns BGR directly
+                return frame
             else:
                 ret, frame = self.camera.read()
                 return frame if ret else None
