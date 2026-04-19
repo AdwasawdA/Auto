@@ -11,6 +11,15 @@
     /* ── Reset ─────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    /* ── Global accent transition ───────────────────────── */
+    *, *::before, *::after {
+      transition-property: color, background-color, border-color, box-shadow, fill;
+      transition-duration: 0.3s;
+      transition-timing-function: ease;
+    }
+    /* Don't let the global transition fight button-press transforms */
+    .ctrl-btn, .bb-btn { transition: background 0.3s, border-color 0.3s, color 0.3s, box-shadow 0.3s, transform 0.08s; }
+
     /* ── Design tokens ──────────────────────────────────── */
     :root {
       --bg:      #0a0c0f;
@@ -146,25 +155,27 @@
       margin-top: 4px;
     }
 
-    /* Vertical range slider — scaleY(-1) flips so high value is at top */
-    input[type=range] {
-      -webkit-appearance: slider-vertical;
-      appearance: slider-vertical;
+    /* ── Speed slider (vertical pill, 4 stages) ─────────── */
+    #speed-slider {
+      -webkit-appearance: none; appearance: none;
       writing-mode: vertical-lr;
       width: 32px; height: 200px;
-      background: var(--border); border-radius: 2px; outline: none;
+      background: var(--border); border-radius: 16px; outline: none;
       cursor: pointer;
       transform: scaleY(-1);
+      --thumb-color: var(--dim);
+      --thumb-glow: none;
     }
-    input[type=range]::-webkit-slider-thumb {
+    #speed-slider::-webkit-slider-thumb {
       -webkit-appearance: none; appearance: none;
-      width: 22px; height: 22px; border-radius: 50%;
-      background: var(--accent); cursor: pointer;
-      box-shadow: 0 0 8px var(--accent);
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--thumb-color); cursor: pointer;
+      box-shadow: var(--thumb-glow);
+      transition: background 0.2s, box-shadow 0.2s;
     }
-    input[type=range]::-moz-range-thumb {
-      width: 22px; height: 22px; border-radius: 50%;
-      background: var(--accent); cursor: pointer; border: none;
+    #speed-slider::-moz-range-thumb {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--thumb-color); cursor: pointer; border: none;
     }
 
     /* Column of forward / stop / back buttons */
@@ -352,7 +363,7 @@
       <div class="panel-label">SPEED</div>
       <div id="speed-display">0</div>
       <div class="speed-ctrl-row">
-        <input type="range" id="speed-slider" min="0" max="100" value="0" step="2">
+        <input type="range" id="speed-slider" min="0" max="4" value="0" step="1">
         <div class="speed-btns-col">
           <button class="ctrl-btn" id="btn-dopredu" aria-label="Forward">
             <svg viewBox="0 0 24 24"><path d="M12 4l-8 8h5v8h6v-8h5z"/></svg>
@@ -421,7 +432,16 @@
     // ── State ───────────────────────────────────────────
     let ws = null;
     let reconnectTimer = null;
-    let speed = 50;
+    let speed = 0;
+
+    const STAGE_SPEEDS  = [0, 35, 50, 75, 100];
+    const STAGE_COLORS  = ['#4a5568', '#22c55e', '#00e5ff', '#f97316', '#a855f7'];
+    const STAGE_GLOWS   = ['none',
+      '0 0 8px #22c55e',
+      '0 0 8px #00e5ff',
+      '0 0 8px #f97316',
+      '0 0 8px #a855f7'];
+    const STAGE_LABELS  = ['OFF', 'SLOW', 'NORM', 'FAST', 'FULL'];
 
     // ── WebSocket ───────────────────────────────────────
     function setRCConnected(ok) {
@@ -461,10 +481,17 @@
     }
 
     // ── Speed slider ────────────────────────────────────
-    speedSlider.addEventListener('input', () => {
-      speed = parseInt(speedSlider.value);
+    function applyStage(stage) {
+      speed = STAGE_SPEEDS[stage];
       speedDisplay.textContent = speed;
-    });
+      const color = STAGE_COLORS[stage];
+      const glow  = STAGE_GLOWS[stage];
+      document.documentElement.style.setProperty('--accent', color);
+      speedSlider.style.setProperty('--thumb-color', color);
+      speedSlider.style.setProperty('--thumb-glow',  glow);
+    }
+    speedSlider.addEventListener('input', () => applyStage(parseInt(speedSlider.value)));
+    applyStage(0);
 
     // ── Button actions (drive + stop only) ──────────────
     const actions = {
@@ -577,7 +604,7 @@
     setInterval(updateStatus, 2000);
 
     // ── Distance via WebSocket ──────────────────────────
-    setInterval(() => send('vzdialenost'), 2000);
+    setInterval(() => send('vzdialenost'), 500);
 
     // ── Init ────────────────────────────────────────────
     connect();

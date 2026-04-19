@@ -46,6 +46,25 @@ except ImportError:
 auto = None
 auto_lock = threading.Lock()
 
+# Distance cache — updated by background poller at 5 Hz
+_latest_distance = None
+_distance_lock = threading.Lock()
+
+
+def _distance_poller():
+    """Background thread: reads distance sensor 5x per second and caches the result."""
+    global _latest_distance
+    while True:
+        try:
+            if auto is not None:
+                with auto_lock:
+                    dist = auto.vzdialenost()
+                with _distance_lock:
+                    _latest_distance = dist
+        except Exception as e:
+            log.error("Distance poll error: %s", e)
+        time.sleep(0.5)
+
 # Configuration
 INFERENCE_SERVER_URL = "ws://10.42.0.168:8765"  # Update with your PC IP
 SHOW_BBOX = True
@@ -96,8 +115,8 @@ def handle_command(data: dict) -> dict:
             return {"ok": True, "action": action}
 
         elif action == "vzdialenost":
-            with auto_lock:
-                dist = auto.vzdialenost()
+            with _distance_lock:
+                dist = _latest_distance
             return {"ok": True, "action": action, "distance": dist}
 
         else:
@@ -379,6 +398,9 @@ async def _async_main(host, port):
         log.info("Starting with REAL hardware")
         from car_setup import create_auto
         auto = create_auto()
+
+    threading.Thread(target=_distance_poller, daemon=True, name="distance-poller").start()
+    log.info("Distance poller started at 2 Hz")
 
     log.info("Initializing camera service...")
     await init_camera_service(INFERENCE_SERVER_URL)
