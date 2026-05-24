@@ -50,6 +50,27 @@ auto_lock = threading.Lock()
 _latest_distance = None
 _distance_lock = threading.Lock()
 
+# Person follower — instantiated at startup
+_follower = None
+
+# Runtime-tunable settings (shared between UI and follower)
+_settings = {
+    "speed_stage_1":    35,
+    "speed_stage_2":    50,
+    "speed_stage_3":    75,
+    "speed_stage_4":    100,
+    "manual_steer_max": 20,
+    "follow_steer_max": 20,
+    "follow_speed_slow":  50,
+    "follow_speed_drive": 80,
+    "bbox_h_stop":  455,
+    "bbox_h_hold":  400,
+    "bbox_h_slow":  280,
+    "ema_alpha":    0.25,
+    "dead_zone_px": 30,
+}
+_settings_lock = threading.Lock()
+
 
 def _distance_poller():
     """Background thread: reads distance sensor 5x per second and caches the result."""
@@ -81,6 +102,11 @@ def handle_command(data: dict) -> dict:
     Returns a dict that is sent back to the client as JSON.
     """
     action = data.get("action")
+
+    # disable follow mode only on actual movement commands, not read-only queries
+    _MOVEMENT_ACTIONS = {"dopredu", "dozadu", "stop", "doprava", "dolava", "rovno"}
+    if action in _MOVEMENT_ACTIONS and _follower is not None and _follower.is_enabled:
+        _follower.disable()
     value = data.get("value", 10)  # default speed/steering 50%
 
     try:
@@ -336,6 +362,39 @@ def toggle_bbox():
     return jsonify({"error": "Invalid request"}), 400
 
 
+@app.route('/api/settings', methods=['GET'])
+def api_settings_get():
+    with _settings_lock:
+        return jsonify(dict(_settings))
+
+
+@app.route('/api/settings', methods=['POST'])
+def api_settings_post():
+    updates = request.get_json() or {}
+    with _settings_lock:
+        _settings.update({k: v for k, v in updates.items() if k in _settings})
+        snapshot = dict(_settings)
+    if _follower is not None:
+        _follower.update_settings(snapshot)
+    return jsonify(snapshot)
+
+
+@app.route('/api/follow', methods=['POST'])
+def api_follow():
+    """Enable or disable person-following mode."""
+    global _follower
+    enabled = (request.get_json() or {}).get('enabled')
+    if enabled is None:
+        return jsonify({"error": "Missing 'enabled' field"}), 400
+    if _follower is None:
+        return jsonify({"error": "Follower not initialized"}), 503
+    if enabled:
+        _follower.enable()
+    else:
+        _follower.disable()
+    return jsonify({"follow": _follower.is_enabled})
+
+
 @app.route('/api/status')
 def api_status():
     """Get service status"""
@@ -344,10 +403,12 @@ def api_status():
         log.info("/api/status initializing")
         return jsonify({"status": "initializing"}), 503
     
+    follow_status = _follower.get_status() if _follower is not None else {}
     return jsonify({
         "status": "running",
         "inference_connected": service.inference_client.connected,
-        "show_bbox": SHOW_BBOX
+        "show_bbox": SHOW_BBOX,
+        **follow_status,
     })
 
 
@@ -401,6 +462,28 @@ async def _async_main(host, port):
 
     threading.Thread(target=_distance_poller, daemon=True, name="distance-poller").start()
     log.info("Distance poller started at 2 Hz")
+
+    global _follower
+    from follower import PersonFollower
+
+    def _get_cached_distance():
+        with _distance_lock:
+            return _latest_distance
+
+    def _get_camera_detections():
+        svc = get_camera_service()
+        return svc.get_detections() if svc else []
+
+    with _settings_lock:
+        initial_settings = dict(_settings)
+    _follower = PersonFollower(
+        auto=auto,
+        get_distance_fn=_get_cached_distance,
+        get_detections_fn=_get_camera_detections,
+        auto_lock=auto_lock,
+        settings=initial_settings,
+    )
+    log.info("PersonFollower initialized")
 
     log.info("Initializing camera service...")
     await init_camera_service(INFERENCE_SERVER_URL)

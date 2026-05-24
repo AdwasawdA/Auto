@@ -125,13 +125,21 @@ class Tofl:
     def distance(self):
         return self.tofl.range
         
+class Crash_Sensor:
+    def __init__(self, pin = None):
+        GPIO.setup(pin, GPIO.IN)
+        self.pin = pin
+    def naraz(self):
+        if GPIO.input(8) == GPIO.LOW:
+            return 1
 
 class Auto:
     def __init__(self, pohon = None, odbacanie = None, 
-                 ultrazvuk = None, sleep_time = 0.05):
+                 ultrazvuk = None, crash_sensor = None, sleep_time = 0.05):
         self.pohon = pohon
         self.odbacanie = odbacanie
         self.ultrazvuk = ultrazvuk
+        self.crash_sensor = crash_sensor
         self._dopredu = True
         self.rychlost = 0
         self.sleep_time = sleep_time
@@ -222,3 +230,8 @@ class Auto:
             dist = self.ultrazvuk.distance()
             print ("Measured Distance = %.1f cm" % dist)
         return dist
+    
+    def naraz(self):
+        naraz = 0
+        if self.crash_sensor is not None:
+            naraz = self.crash_sensor.naraz()

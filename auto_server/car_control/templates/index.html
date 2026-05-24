@@ -344,16 +344,48 @@
         <span id="total-latency">—</span>
         <span>ms</span>
       </div>
+      <div class="status-sep" id="follow-sep" style="display:none"></div>
+      <div class="conn-group" id="follow-status-group" style="display:none">
+        <div class="conn-dot" id="follow-dot"></div>
+        <span id="follow-label">FOLLOW</span>
+      </div>
     </div>
 
-    <label class="bbox-wrap">
-      <span>BBOX</span>
-      <label class="toggle-switch">
-        <input type="checkbox" id="bbox-toggle" checked>
-        <span class="toggle-track"></span>
+    <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+      <label class="bbox-wrap">
+        <span>BBOX</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="bbox-toggle" checked>
+          <span class="toggle-track"></span>
+        </label>
       </label>
-    </label>
+      <button id="settings-btn" aria-label="Settings" style="
+        background:none;border:1px solid var(--border);border-radius:6px;
+        color:var(--dim);cursor:pointer;display:flex;align-items:center;justify-content:center;
+        width:32px;height:32px;flex-shrink:0;padding:0;
+        transition:border-color 0.2s,color 0.2s;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </div>
   </header>
+
+  <!-- ── Settings panel ────────────────────────────────── -->
+  <div id="settings-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:200;" id="settings-overlay"></div>
+  <aside id="settings-panel" style="
+    position:fixed;top:0;right:0;bottom:0;width:300px;max-width:100vw;
+    background:var(--surface);border-left:1px solid var(--border);
+    overflow-y:auto;z-index:201;
+    transform:translateX(100%);transition:transform 0.25s ease;
+    display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:3px;color:var(--accent);">SETTINGS</span>
+      <button id="settings-close" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:20px;line-height:1;padding:2px 6px;">✕</button>
+    </div>
+    <div id="settings-body" style="padding:12px 16px;display:flex;flex-direction:column;gap:6px;flex:1;"></div>
+  </aside>
 
   <!-- ── Main 3-column grid ─────────────────────────── -->
   <main id="main-grid">
@@ -419,6 +451,10 @@
     const connLabel       = document.getElementById('conn-label');
     const inferDot        = document.getElementById('infer-dot');
     const inferLabel      = document.getElementById('infer-label');
+    const followDot       = document.getElementById('follow-dot');
+    const followLabel     = document.getElementById('follow-label');
+    const followSep       = document.getElementById('follow-sep');
+    const followGroup     = document.getElementById('follow-status-group');
     const bboxToggle      = document.getElementById('bbox-toggle');
     const speedDisplay    = document.getElementById('speed-display');
     const speedSlider     = document.getElementById('speed-slider');
@@ -562,6 +598,29 @@
       if (keyMap[e.key].release) keyMap[e.key].release();
     });
 
+    // ── Follow toggle ────────────────────────────────────
+    let followEnabled = false;
+    const btnFollow = document.getElementById('btn-bb-select');
+
+    async function setFollow(enabled) {
+      try {
+        const r = await fetch('/api/follow', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled })
+        });
+        const data = await r.json();
+        followEnabled = data.follow ?? enabled;
+      } catch(err) {
+        console.error('Follow toggle failed:', err);
+        followEnabled = false;
+      }
+      btnFollow.style.borderColor = followEnabled ? 'var(--accent)' : '';
+      btnFollow.style.color       = followEnabled ? 'var(--accent)' : '';
+    }
+
+    btnFollow.addEventListener('click', () => setFollow(!followEnabled));
+
     // ── BBox toggle ─────────────────────────────────────
     bboxToggle.addEventListener('change', async (e) => {
       try {
@@ -595,6 +654,15 @@
         inferLabel.textContent = inferOk ? 'INFER' : 'INFER: OFF';
         inferLatencyEl.style.display = inferOk ? '' : 'none';
         bboxToggle.checked     = !!s.show_bbox;
+
+        const fEnabled = !!s.follow_enabled;
+        followSep.style.display   = fEnabled ? '' : 'none';
+        followGroup.style.display = fEnabled ? '' : 'none';
+        if (fEnabled) {
+          const fSeen = !!s.person_detected;
+          followDot.className    = 'conn-dot' + (fSeen ? ' connected' : '');
+          followLabel.textContent = fSeen ? 'FOLLOW' : 'FOLLOW: LOST';
+        }
       } catch(_) {
         inferDot.className     = 'conn-dot';
         inferLabel.textContent = 'INFER: ERR';
@@ -605,6 +673,133 @@
 
     // ── Distance via WebSocket ──────────────────────────
     setInterval(() => send('vzdialenost'), 500);
+
+    // ── Settings panel ──────────────────────────────────
+    const settingsBtn     = document.getElementById('settings-btn');
+    const settingsPanel   = document.getElementById('settings-panel');
+    const settingsOverlay = document.getElementById('settings-overlay');
+    const settingsClose   = document.getElementById('settings-close');
+    const settingsBody    = document.getElementById('settings-body');
+
+    const SETTING_DEFS = [
+      { section: 'MANUAL CONTROL' },
+      { key: 'speed_stage_1',    label: 'Speed stage 1',   min: 1,   max: 100, step: 1,    unit: '%' },
+      { key: 'speed_stage_2',    label: 'Speed stage 2',   min: 1,   max: 100, step: 1,    unit: '%' },
+      { key: 'speed_stage_3',    label: 'Speed stage 3',   min: 1,   max: 100, step: 1,    unit: '%' },
+      { key: 'speed_stage_4',    label: 'Speed stage 4',   min: 1,   max: 100, step: 1,    unit: '%' },
+      { key: 'manual_steer_max', label: 'Max steer',       min: 1,   max: 100, step: 1,    unit: '%' },
+      { section: 'FOLLOW — SPEED' },
+      { key: 'follow_steer_max',   label: 'Max steer',     min: 1,   max: 100, step: 1,    unit: '%' },
+      { key: 'follow_speed_slow',  label: 'Slow speed',    min: 1,   max: 100, step: 1,    unit: '%' },
+      { key: 'follow_speed_drive', label: 'Drive speed',   min: 1,   max: 100, step: 1,    unit: '%' },
+      { section: 'FOLLOW — DETECTION' },
+      { key: 'bbox_h_stop',  label: 'Stop bbox H',  min: 50, max: 479, step: 5, unit: 'px' },
+      { key: 'bbox_h_hold',  label: 'Hold bbox H',  min: 50, max: 479, step: 5, unit: 'px' },
+      { key: 'bbox_h_slow',  label: 'Slow bbox H',  min: 50, max: 479, step: 5, unit: 'px' },
+      { key: 'ema_alpha',    label: 'EMA alpha',    min: 0.05, max: 0.95, step: 0.05, unit: '' },
+      { key: 'dead_zone_px', label: 'Dead zone',    min: 5,  max: 150, step: 5,  unit: 'px' },
+    ];
+
+    let currentSettings = {};
+    let saveTimer = null;
+
+    function buildSettingsUI(vals) {
+      settingsBody.innerHTML = '';
+      SETTING_DEFS.forEach(def => {
+        if (def.section) {
+          const hdr = document.createElement('div');
+          hdr.style.cssText = 'font-size:9px;letter-spacing:3px;color:var(--dim);margin-top:10px;margin-bottom:4px;';
+          hdr.textContent = def.section;
+          settingsBody.appendChild(hdr);
+          return;
+        }
+        const val = vals[def.key] ?? 0;
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;';
+
+        const lbl = document.createElement('span');
+        lbl.style.cssText = 'font-size:10px;color:var(--text);flex:1;white-space:nowrap;';
+        lbl.textContent = def.label;
+
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = def.min; slider.max = def.max; slider.step = def.step;
+        slider.value = val;
+        slider.style.cssText = 'width:100px;accent-color:var(--accent);cursor:pointer;';
+
+        const display = document.createElement('span');
+        display.style.cssText = 'font-size:10px;color:var(--accent);min-width:44px;text-align:right;font-family:"Share Tech Mono",monospace;';
+        display.textContent = val + def.unit;
+
+        slider.addEventListener('input', () => {
+          const v = def.step < 1 ? parseFloat(slider.value) : parseInt(slider.value);
+          display.textContent = v + def.unit;
+          currentSettings[def.key] = v;
+          clearTimeout(saveTimer);
+          saveTimer = setTimeout(() => saveSettings({ [def.key]: v }), 200);
+        });
+
+        row.appendChild(lbl);
+        row.appendChild(slider);
+        row.appendChild(display);
+        settingsBody.appendChild(row);
+      });
+    }
+
+    async function saveSettings(patch) {
+      try {
+        await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch)
+        });
+        applyManualSettings();
+      } catch(e) { console.error('Settings save failed', e); }
+    }
+
+    function applyManualSettings() {
+      const s = currentSettings;
+      if (s.speed_stage_1 !== undefined) {
+        STAGE_SPEEDS[1] = s.speed_stage_1;
+        STAGE_SPEEDS[2] = s.speed_stage_2 ?? STAGE_SPEEDS[2];
+        STAGE_SPEEDS[3] = s.speed_stage_3 ?? STAGE_SPEEDS[3];
+        STAGE_SPEEDS[4] = s.speed_stage_4 ?? STAGE_SPEEDS[4];
+        applyStage(parseInt(speedSlider.value));
+      }
+      if (s.manual_steer_max !== undefined) {
+        const m = s.manual_steer_max;
+        steerSlider.min = -m; steerSlider.max = m;
+        steerSlider.value = Math.max(-m, Math.min(m, parseInt(steerSlider.value)));
+        document.querySelector('#panel-dir div[style*="justify-content:space-between"]').innerHTML =
+          `<span>-${m}%</span><span>0</span><span>+${m}%</span>`;
+        keyMap['ArrowLeft'].press  = () => send('dolava',  m);
+        keyMap['ArrowRight'].press = () => send('doprava', m);
+      }
+    }
+
+    async function openSettings() {
+      try {
+        const r = await fetch('/api/settings');
+        currentSettings = await r.json();
+        buildSettingsUI(currentSettings);
+        applyManualSettings();
+      } catch(e) { console.error('Failed to load settings', e); }
+      settingsOverlay.style.display = '';
+      settingsPanel.style.transform = 'translateX(0)';
+      settingsBtn.style.borderColor = 'var(--accent)';
+      settingsBtn.style.color = 'var(--accent)';
+    }
+
+    function closeSettings() {
+      settingsOverlay.style.display = 'none';
+      settingsPanel.style.transform = 'translateX(100%)';
+      settingsBtn.style.borderColor = '';
+      settingsBtn.style.color = '';
+    }
+
+    settingsBtn.addEventListener('click', openSettings);
+    settingsClose.addEventListener('click', closeSettings);
+    settingsOverlay.addEventListener('click', closeSettings);
 
     // ── Init ────────────────────────────────────────────
     connect();
