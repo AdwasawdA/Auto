@@ -119,8 +119,9 @@ class Ultrazvuk:
         return distance
     
 class Tofl:
-    def __init__(self, scl = SCL, sda = SDA):
-        i2c = busio.I2C(scl, sda)
+    def __init__(self, i2c=None, scl=SCL, sda=SDA):
+        if i2c is None:
+            i2c = busio.I2C(scl, sda)
         self.tofl = adafruit_vl53l0x.VL53L0X(i2c)
     def distance(self):
         return self.tofl.range
@@ -130,8 +131,9 @@ class Crash_Sensor:
         GPIO.setup(pin, GPIO.IN)
         self.pin = pin
     def naraz(self):
-        if GPIO.input(8) == GPIO.LOW:
+        if GPIO.input(self.pin) == GPIO.LOW:
             return 1
+        return 0
 
 class Auto:
     def __init__(self, pohon = None, odbacanie = None, 

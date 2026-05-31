@@ -52,6 +52,7 @@ _distance_lock = threading.Lock()
 
 # Person follower — instantiated at startup
 _follower = None
+_safety_monitor = None
 
 # Runtime-tunable settings (shared between UI and follower)
 _settings = {
@@ -68,6 +69,10 @@ _settings = {
     "bbox_h_slow":  280,
     "ema_alpha":    0.25,
     "dead_zone_px": 30,
+    "safety_distance_mm":    400,
+    "safety_reverse_speed":  80,
+    "safety_reverse_duration": 0.5,
+    "safety_cooldown":       2.0,
 }
 _settings_lock = threading.Lock()
 
@@ -309,7 +314,7 @@ def generate_frames():
             #frame = draw_metrics(frame, avg_metrics, current_show_bbox)
             
             # Encode frame as JPEG
-            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
             frame_bytes = buffer.tobytes()
             
             # Yield frame in MJPEG format
@@ -376,6 +381,8 @@ def api_settings_post():
         snapshot = dict(_settings)
     if _follower is not None:
         _follower.update_settings(snapshot)
+    if _safety_monitor is not None:
+        _safety_monitor.update_settings(snapshot)
     return jsonify(snapshot)
 
 
@@ -459,6 +466,10 @@ async def _async_main(host, port):
         log.info("Starting with REAL hardware")
         from car_setup import create_auto
         auto = create_auto()
+        from safety_monitor import SafetyMonitor
+        global _safety_monitor
+        _safety_monitor = SafetyMonitor(auto=auto, auto_lock=auto_lock)
+        _safety_monitor.start()
 
     threading.Thread(target=_distance_poller, daemon=True, name="distance-poller").start()
     log.info("Distance poller started at 2 Hz")
@@ -483,6 +494,14 @@ async def _async_main(host, port):
         auto_lock=auto_lock,
         settings=initial_settings,
     )
+
+    _safety_monitor = SafetyMonitor(
+        auto=auto,
+        auto_lock=auto_lock,
+        get_distance_fn=_get_cached_distance,   # already defined above for _follower
+    )
+    
+    _safety_monitor.start()
     log.info("PersonFollower initialized")
 
     log.info("Initializing camera service...")

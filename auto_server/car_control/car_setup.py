@@ -20,8 +20,13 @@ def create_auto() -> Auto:
     
     servo = Servo_Motor(pca, 0, 500, 2400, 270, 155)
     odbacanie = Odbacanie(servo=servo, max_uhol=90)
-
-    ultrazvuk = Tofl()
+    
+    try:
+        ultrazvuk = Tofl(i2c)
+    except Exception as e:
+        print(f"Warning: ToF sensor failed to initialize: {e}")
+        ultrazvuk = None
+    
     crash_sensor = Crash_Sensor(8)
 
     return Auto(pohon=pohon, odbacanie=odbacanie, ultrazvuk=ultrazvuk, crash_sensor=crash_sensor)
