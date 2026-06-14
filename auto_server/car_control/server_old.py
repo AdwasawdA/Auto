@@ -50,18 +50,6 @@ auto_lock = threading.Lock()
 _latest_distance = None
 _distance_lock = threading.Lock()
 
-# Flow speed cache — updated by background poller at 2 Hz
-_latest_flow_speed = None
-_flow_speed_lock = threading.Lock()
-
-# Accelerometer cache — updated by background poller at 2 Hz
-_latest_accel = None
-_accel_lock = threading.Lock()
-
-# Per-sensor locks (independent from auto_lock so sensors don't block drive commands)
-_flow_sensor_lock = threading.Lock()
-_accel_sensor_lock = threading.Lock()
-
 # Person follower — instantiated at startup
 _follower = None
 _safety_monitor = None
@@ -101,36 +89,6 @@ def _distance_poller():
                     _latest_distance = dist
         except Exception as e:
             log.error("Distance poll error: %s", e)
-        time.sleep(0.5)
-
-
-def _flow_speed_poller():
-    """Background thread: reads flow sensor speed at 2 Hz and caches the result."""
-    global _latest_flow_speed
-    while True:
-        try:
-            if auto is not None and auto.flow_sensor is not None:
-                with _flow_sensor_lock:
-                    speed = auto.flow_speed()
-                with _flow_speed_lock:
-                    _latest_flow_speed = speed
-        except Exception as e:
-            log.error("Flow speed poll error: %s", e)
-        time.sleep(0.5)
-
-
-def _accel_poller():
-    """Background thread: reads accelerometer at 2 Hz and caches the result."""
-    global _latest_accel
-    while True:
-        try:
-            if auto is not None and auto.accelerometer is not None:
-                with _accel_sensor_lock:
-                    data = auto.all_sensors()
-                with _accel_lock:
-                    _latest_accel = data
-        except Exception as e:
-            log.error("Accel poll error: %s", e)
         time.sleep(0.5)
 
 # Configuration
@@ -395,19 +353,6 @@ def api_metrics():
     return jsonify(metrics)
 
 
-@app.route('/api/sensors')
-def api_sensors():
-    """Get latest flow speed and accelerometer data from caches."""
-    with _flow_speed_lock:
-        speed = _latest_flow_speed
-    with _accel_lock:
-        accel = _latest_accel
-    return jsonify({
-        "flow_speed_kmh": speed,
-        "accel": accel,
-    })
-
-
 @app.route('/api/toggle_bbox', methods=['POST'])
 def toggle_bbox():
     """Toggle bounding box display"""
@@ -527,9 +472,7 @@ async def _async_main(host, port):
         _safety_monitor.start()
 
     threading.Thread(target=_distance_poller, daemon=True, name="distance-poller").start()
-    threading.Thread(target=_flow_speed_poller, daemon=True, name="flow-speed-poller").start()
-    threading.Thread(target=_accel_poller, daemon=True, name="accel-poller").start()
-    log.info("Distance, flow speed and accel pollers started at 2 Hz")
+    log.info("Distance poller started at 2 Hz")
 
     global _follower
     from follower import PersonFollower
@@ -597,3 +540,4 @@ if __name__ == "__main__":
 
     log.info("Car control server starting on http://%s:%d", args.host, args.port)
     app.run(host=args.host, port=args.port, debug=False, threaded=True)
+

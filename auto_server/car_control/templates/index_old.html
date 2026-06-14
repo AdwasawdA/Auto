@@ -359,20 +359,6 @@
           <span class="toggle-track"></span>
         </label>
       </label>
-      <label class="bbox-wrap" id="data-view-wrap" title="Toggle G-meter view">
-        <svg id="data-view-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
-          <circle cx="12" cy="12" r="9"/>
-          <circle cx="12" cy="12" r="1" fill="currentColor"/>
-          <line x1="12" y1="3" x2="12" y2="6"/>
-          <line x1="12" y1="18" x2="12" y2="21"/>
-          <line x1="3" y1="12" x2="6" y2="12"/>
-          <line x1="18" y1="12" x2="21" y2="12"/>
-        </svg>
-        <label class="toggle-switch">
-          <input type="checkbox" id="data-view-toggle">
-          <span class="toggle-track"></span>
-        </label>
-      </label>
       <button id="settings-btn" aria-label="Settings" style="
         background:none;border:1px solid var(--border);border-radius:6px;
         color:var(--dim);cursor:pointer;display:flex;align-items:center;justify-content:center;
@@ -423,45 +409,9 @@
 
     <!-- Center: distance + video feed + bb buttons -->
     <section id="panel-video">
-      <div id="dist-display">DIST: <span id="dist-val">—</span> mm &nbsp;|&nbsp; SPEED: <span id="speed-val">—</span> km/h</div>
-      <div class="video-wrap" id="video-wrap">
+      <div id="dist-display">DIST: <span id="dist-val">—</span> mm</div>
+      <div class="video-wrap">
         <img id="video-stream" src="/video_feed" alt="Camera Feed">
-      </div>
-      <!-- G-meter panel (hidden by default) -->
-      <div id="gmeter-wrap" style="display:none;width:100%;max-width:640px;flex:1;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
-        <svg id="gmeter-svg" viewBox="-160 -160 320 320" width="100%" style="max-height:380px;">
-          <!-- Outer ring -->
-          <circle cx="0" cy="0" r="150" fill="none" stroke="var(--border)" stroke-width="1.5"/>
-          <!-- Mid ring (1G) -->
-          <circle cx="0" cy="0" r="100" fill="none" stroke="var(--border)" stroke-width="1" stroke-dasharray="4 6"/>
-          <!-- Half-G ring -->
-          <circle cx="0" cy="0" r="50" fill="none" stroke="var(--border)" stroke-width="1" stroke-dasharray="2 8"/>
-          <!-- Crosshair lines -->
-          <line x1="-150" y1="0" x2="150" y2="0" stroke="var(--border)" stroke-width="1"/>
-          <line x1="0" y1="-150" x2="0" y2="150" stroke="var(--border)" stroke-width="1"/>
-          <!-- Axis labels -->
-          <text x="0" y="-156" text-anchor="middle" fill="var(--dim)" font-size="10" font-family="'Share Tech Mono',monospace" letter-spacing="1">BRAKE</text>
-          <text x="0" y="163"  text-anchor="middle" fill="var(--dim)" font-size="10" font-family="'Share Tech Mono',monospace" letter-spacing="1">ACCEL</text>
-          <text x="-155" y="4" text-anchor="end"    fill="var(--dim)" font-size="10" font-family="'Share Tech Mono',monospace" letter-spacing="1">L</text>
-          <text x="155"  y="4" text-anchor="start"  fill="var(--dim)" font-size="10" font-family="'Share Tech Mono',monospace" letter-spacing="1">R</text>
-          <!-- G labels on rings -->
-          <text x="4" y="-46"  fill="var(--dim)" font-size="9" font-family="'Share Tech Mono',monospace">0.5G</text>
-          <text x="4" y="-96"  fill="var(--dim)" font-size="9" font-family="'Share Tech Mono',monospace">1G</text>
-          <text x="4" y="-146" fill="var(--dim)" font-size="9" font-family="'Share Tech Mono',monospace">1.5G</text>
-          <!-- Trail dots (rendered by JS) -->
-          <g id="gmeter-trail"></g>
-          <!-- Live dot -->
-          <circle id="gmeter-dot" cx="0" cy="0" r="10" fill="var(--accent)" opacity="0.95"
-            style="filter:drop-shadow(0 0 6px var(--accent));transition:cx 0.08s,cy 0.08s;"/>
-          <!-- Center pip -->
-          <circle cx="0" cy="0" r="3" fill="var(--dim)" opacity="0.6"/>
-        </svg>
-        <!-- G readout row -->
-        <div style="display:flex;gap:32px;font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:2px;color:var(--dim);">
-          <span>LAT <span id="g-lat" style="color:var(--accent);">0.00</span> G</span>
-          <span>LON <span id="g-lon" style="color:var(--accent);">0.00</span> G</span>
-          <span>TOTAL <span id="g-total" style="color:var(--accent);">0.00</span> G</span>
-        </div>
       </div>
       <!-- BBox selection placeholders — functionality to be added later -->
       <div class="bb-btns">
@@ -850,80 +800,6 @@
     settingsBtn.addEventListener('click', openSettings);
     settingsClose.addEventListener('click', closeSettings);
     settingsOverlay.addEventListener('click', closeSettings);
-
-    // ── Sensors polling (flow speed + accelerometer) ────
-    const G = 9.81;           // m/s² per G
-    const G_MAX = 1.5;        // max G shown on meter (edit here to change scale)
-    const RADIUS = 150;       // SVG radius matching the outer ring
-    const TRAIL_MAX = 20;     // number of trail dots to show
-
-    const speedVal    = document.getElementById('speed-val');
-    const gLat        = document.getElementById('g-lat');
-    const gLon        = document.getElementById('g-lon');
-    const gTotal      = document.getElementById('g-total');
-    const gmeterDot   = document.getElementById('gmeter-dot');
-    const gmeterTrail = document.getElementById('gmeter-trail');
-    const videoWrap   = document.getElementById('video-wrap');
-    const gmeterWrap  = document.getElementById('gmeter-wrap');
-    const dataToggle  = document.getElementById('data-view-toggle');
-
-    let trailPoints = [];
-
-    function updateGmeter(accel) {
-      if (!accel || !accel.acceleration) return;
-      const a = accel.acceleration;
-
-      // Y = lateral (left/right), Z = longitudinal (forward/back)
-      const latG  = a.y / G;
-      const lonG  = a.z / G;
-      const totalG = Math.sqrt(latG * latG + lonG * lonG);
-
-      gLat.textContent   = latG.toFixed(2);
-      gLon.textContent   = lonG.toFixed(2);
-      gTotal.textContent = totalG.toFixed(2);
-
-      // Map G to SVG coords. Clamp to outer ring.
-      const scale = RADIUS / G_MAX;
-      const rawX  =  latG * scale;   // positive Y = right
-      const rawY  = -lonG * scale;   // positive Z = forward = up on screen (negate)
-      const clampR = Math.min(Math.sqrt(rawX*rawX + rawY*rawY), RADIUS);
-      const angle  = Math.atan2(rawY, rawX);
-      const cx = (clampR * Math.cos(angle)).toFixed(1);
-      const cy = (clampR * Math.sin(angle)).toFixed(1);
-
-      gmeterDot.setAttribute('cx', cx);
-      gmeterDot.setAttribute('cy', cy);
-
-      // Trail
-      trailPoints.push({ cx, cy });
-      if (trailPoints.length > TRAIL_MAX) trailPoints.shift();
-      gmeterTrail.innerHTML = trailPoints.map((p, i) => {
-        const opacity = (0.08 + 0.3 * (i / TRAIL_MAX)).toFixed(2);
-        const r = (2 + 3 * (i / TRAIL_MAX)).toFixed(1);
-        return `<circle cx="${p.cx}" cy="${p.cy}" r="${r}" fill="var(--accent)" opacity="${opacity}"/>`;
-      }).join('');
-    }
-
-    async function updateSensors() {
-      try {
-        const r = await fetch('/api/sensors');
-        const d = await r.json();
-        if (d.flow_speed_kmh !== null && d.flow_speed_kmh !== undefined) {
-          speedVal.textContent = d.flow_speed_kmh.toFixed(1);
-        }
-        if (gmeterWrap.style.display !== 'none') {
-          updateGmeter(d.accel);
-        }
-      } catch(_) {}
-    }
-    setInterval(updateSensors, 100);
-
-    // ── Data view toggle ────────────────────────────────
-    dataToggle.addEventListener('change', () => {
-      const showData = dataToggle.checked;
-      videoWrap.style.display  = showData ? 'none' : '';
-      gmeterWrap.style.display = showData ? 'flex' : 'none';
-    });
 
     // ── Init ────────────────────────────────────────────
     connect();

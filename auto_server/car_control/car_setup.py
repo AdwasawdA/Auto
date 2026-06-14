@@ -1,9 +1,4 @@
-"""
-Car hardware initialization.
-Import this module to get a fully configured Auto instance.
-Separated from server.py so it can be mocked in tests.
-"""
-from pohyb2 import Auto, Odbacanie, DC_Motor, Servo_Motor, Pohon, Tofl, Crash_Sensor
+from pohyb2 import Auto, Odbacanie, DC_Motor, Servo_Motor, Pohon, Tofl, Crash_Sensor, Flow_Sensor, Accelerometer
 from adafruit_pca9685 import PCA9685
 from board import SCL, SDA
 import busio
@@ -27,6 +22,22 @@ def create_auto() -> Auto:
         print(f"Warning: ToF sensor failed to initialize: {e}")
         ultrazvuk = None
     
-    crash_sensor = Crash_Sensor(8)
+    try:
+        crash_sensor = Crash_Sensor(8)
+    except Exception as e:
+        print(f"Warning: Crash sensor failed to initialize: {e}")
+        crash_sensor = None
 
-    return Auto(pohon=pohon, odbacanie=odbacanie, ultrazvuk=ultrazvuk, crash_sensor=crash_sensor)
+    try:
+        flow_sensor = Flow_Sensor(height_cm=1.95, K=0.003100)
+    except Exception as e:
+        print(f"Warning: Flow sensor failed to initialize: {e}")
+        flow_sensor = None
+
+    try:
+        accelerometer = Accelerometer(address=0x68)
+    except Exception as e:
+        print(f"Warning: Accelerometer failed to initialize: {e}")
+        accelerometer = None
+
+    return Auto(pohon=pohon, odbacanie=odbacanie, ultrazvuk=ultrazvuk, crash_sensor=crash_sensor, flow_sensor=flow_sensor, accelerometer=accelerometer)

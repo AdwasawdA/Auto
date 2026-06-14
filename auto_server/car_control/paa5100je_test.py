@@ -4,12 +4,13 @@ from pmw3901 import PAA5100
 
 # --- CONFIGURATION CONSTANTS ---
 # 1. Physical mounting height from the lens to the surface (in centimeters)
-SENSOR_HEIGHT_CM = 3.0  
+SENSOR_HEIGHT_CM = 1.95  
 
 # 2. Calibration factor (k)
 # This constant maps pixel displacement to physical distance at a unit height.
 # Adjust this value empirically if your measured distance deviates from reality.
-CALIBRATION_K = 0.0025  
+#CALIBRATION_K = 0.0025
+CALIBRATION_K = 0.003100  
 
 try:
     sensor = PAA5100()
