@@ -300,7 +300,7 @@ def draw_metrics(frame: np.ndarray, metrics: dict, show_bbox: bool) -> np.ndarra
 
 
 def generate_frames():
-    """Generator for MJPEG stream"""
+    """Generator for MJPEG stream — blocks until a genuinely new frame arrives."""
     global SHOW_BBOX
     
     while True:
@@ -309,13 +309,19 @@ def generate_frames():
             if service is None:
                 time.sleep(0.1)
                 continue
-            
-            # Get latest frame
+
+            # Block until the async capture loop signals a new frame (max 1s wait)
+            service.new_frame_event.wait(timeout=1.0)
+            service.new_frame_event.clear()
+
+            # Get the latest frame (thread-safe, no redundant copy here)
             frame = service.get_latest_frame()
             if frame is None:
-                time.sleep(0.1)
                 continue
-            
+
+            # Work on a local copy so we don't hold the lock during encoding
+            frame = frame.copy()
+
             capture_time = time.time()
             
             # Get detections
@@ -350,10 +356,6 @@ def generate_frames():
                     total_latency_ms=total_latency_ms
                 )
                 service.add_metrics(frame_metrics)
-            
-            # Draw metrics overlay
-            avg_metrics['avg_render_ms'] = render_time_ms  # Update with current
-            #frame = draw_metrics(frame, avg_metrics, current_show_bbox)
             
             # Encode frame as JPEG
             _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 60])

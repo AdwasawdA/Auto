@@ -7,6 +7,7 @@ import base64
 import json
 import logging
 import time
+import threading
 from dataclasses import dataclass
 from typing import Optional, List
 import sys
@@ -263,6 +264,9 @@ class InferenceClient:
 class CameraService:
     """Main camera service - captures, sends to inference, stores results"""
     
+    # Send every Nth frame to inference (1 = every frame, 2 = every other, etc.)
+    INFERENCE_FRAME_SKIP = 1
+
     def __init__(
         self,
         inference_url: str = "ws://localhost:8765",
@@ -271,7 +275,7 @@ class CameraService:
     ):
         """
         Initialize camera service
-        
+
         Args:
             inference_url: URL of inference server
             resolution: Camera resolution
@@ -284,7 +288,12 @@ class CameraService:
         self.metrics_history = []
         self.max_metrics_history = 100
         self._running = False
-        
+
+        # Threading primitives for safe frame handoff to sync Flask thread
+        self._frame_lock = threading.Lock()
+        self.new_frame_event = threading.Event()
+        self._inference_frame_counter = 0
+
     async def start(self):
         """Start camera service"""
         logger.info("Starting camera service...")
@@ -306,7 +315,7 @@ class CameraService:
         await asyncio.gather(*tasks, return_exceptions=True)
     
     async def _capture_loop(self):
-        """Main capture loop"""
+        """Main capture loop — runs at full FPS, inference is best-effort."""
         frame_interval = 1.0 / self.camera.fps
         
         while self._running:
@@ -319,24 +328,36 @@ class CameraService:
                 await asyncio.sleep(0.1)
                 continue
             
-            capture_time = time.time()
-            self.latest_frame = frame.copy()
-            
-            # Send to inference server
+            # Store latest frame safely for the Flask MJPEG thread
+            with self._frame_lock:
+                self.latest_frame = frame
+            # Signal Flask generator that a new frame is ready
+            self.new_frame_event.set()
+
+            # Send to inference only when connected, non-blocking best-effort
             if self.inference_client.connected:
-                await self.inference_client.send_frame(frame)
-                
+                self._inference_frame_counter += 1
+                if self._inference_frame_counter >= self.INFERENCE_FRAME_SKIP:
+                    self._inference_frame_counter = 0
+                    try:
+                        await asyncio.wait_for(
+                            self.inference_client.send_frame(frame),
+                            timeout=0.05  # never let a slow send block the capture loop
+                        )
+                    except asyncio.TimeoutError:
+                        pass
                 # Get latest detections
                 self.latest_detections = self.inference_client.get_detections()
-            
-            # Calculate timing
+
+            # Pace to target FPS
             elapsed = time.time() - start_time
             sleep_time = max(0, frame_interval - elapsed)
             await asyncio.sleep(sleep_time)
     
     def get_latest_frame(self) -> Optional[np.ndarray]:
-        """Get latest captured frame"""
-        return self.latest_frame.copy() if self.latest_frame is not None else None
+        """Get latest captured frame (thread-safe, no copy unless needed)."""
+        with self._frame_lock:
+            return self.latest_frame if self.latest_frame is not None else None
     
     def get_detections(self) -> List[Detection]:
         """Get latest detections"""
