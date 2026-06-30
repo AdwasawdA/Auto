@@ -46,6 +46,11 @@ except ImportError:
 auto = None
 auto_lock = threading.Lock()
 
+# Inference state
+_no_inference = False
+_inference_lost = False
+_inference_lost_lock = threading.Lock()
+
 # Distance cache — updated by background poller at 5 Hz
 _latest_distance = None
 _distance_lock = threading.Lock()
@@ -410,6 +415,27 @@ def api_sensors():
     })
 
 
+@app.route('/api/inference-status')
+def api_inference_status():
+    """Returns whether inference connection is lost."""
+    with _inference_lost_lock:
+        lost = _inference_lost
+    return jsonify({"inference_lost": lost})
+
+
+@app.route('/api/inference-continue', methods=['POST'])
+def api_inference_continue():
+    """User dismissed the inference-lost popup — continue without inference."""
+    global _inference_lost
+    with _inference_lost_lock:
+        _inference_lost = False
+    # Stop follower if it was running — can't follow without inference
+    if _follower is not None and _follower.is_enabled:
+        _follower.disable()
+    log.info("User dismissed inference-lost — continuing without inference")
+    return jsonify({"ok": True})
+
+
 @app.route('/api/toggle_bbox', methods=['POST'])
 def toggle_bbox():
     """Toggle bounding box display"""
@@ -476,6 +502,64 @@ def api_status():
     })
 
 
+def _inference_monitor():
+    """
+    Background thread: watches inference connection every 5s.
+    If it drops, sets _inference_lost and starts LED blink animation.
+    Clears when reconnected or user dismisses via /api/inference-lost.
+    """
+    global _inference_lost
+    from launcher import LEDAnimator, INFERENCE_URL
+    import RPi.GPIO as GPIO
+
+    GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BCM)
+    LED_PINS = [5, 6, 13]
+    for pin in LED_PINS:
+        GPIO.setup(pin, GPIO.OUT)
+        GPIO.output(pin, GPIO.HIGH)  # solid on at start (launcher left them lit)
+
+    def leds_solid():
+        for pin in LED_PINS:
+            GPIO.output(pin, GPIO.HIGH)
+
+    animator = LEDAnimator()
+    was_connected = True  # launcher verified connection before starting server
+
+    while True:
+        time.sleep(5)
+        svc = get_camera_service()
+        if svc is None:
+            continue
+        currently_connected = svc.inference_client.connected
+
+        if was_connected and not currently_connected:
+            log.warning("Inference server lost — starting LED animation")
+            with _inference_lost_lock:
+                _inference_lost = True
+            animator.start()
+
+        elif not was_connected and currently_connected:
+            log.info("Inference server reconnected")
+            animator.stop()
+            leds_solid()
+            with _inference_lost_lock:
+                _inference_lost = False
+
+        was_connected = currently_connected
+
+
+def _safe_stop():
+    """Stop motors and straighten servo — called on disconnect or watchdog timeout."""
+    try:
+        with auto_lock:
+            auto.stop()
+            auto.rovno()
+        log.info("Safe stop executed")
+    except Exception as e:
+        log.error("Safe stop failed: %s", e)
+
+
 def _register_ws():
     pass  # defined below if sock available
 
@@ -483,20 +567,48 @@ if _has_sock:
     @sock.route("/ws")
     def websocket(ws):
         log.info("Client connected")
+
+        # Watchdog: if no message arrives within this many seconds, stop the car
+        WATCHDOG_TIMEOUT = 3.0
+        watchdog_timer = None
+
+        def _watchdog_fire():
+            log.warning("Watchdog timeout — no heartbeat received, stopping car")
+            _safe_stop()
+
+        def _reset_watchdog():
+            nonlocal watchdog_timer
+            if watchdog_timer is not None:
+                watchdog_timer.cancel()
+            watchdog_timer = threading.Timer(WATCHDOG_TIMEOUT, _watchdog_fire)
+            watchdog_timer.daemon = True
+            watchdog_timer.start()
+
+        _reset_watchdog()
         try:
             while True:
                 raw = ws.receive()
                 if raw is None:
                     break
+                _reset_watchdog()
                 try:
                     data = json.loads(raw)
+                    # Ping is just a heartbeat — reset watchdog, no further action
+                    if data.get("action") == "ping":
+                        continue
                     log.info("Command: %s", data)
                     response = handle_command(data)
                 except json.JSONDecodeError:
                     response = {"ok": False, "error": "Invalid JSON"}
-                ws.send(json.dumps(response))
+                    ws.send(json.dumps(response))
+                else:
+                    ws.send(json.dumps(response))
         except Exception as e:
             log.info("Client disconnected: %s", e)
+        finally:
+            if watchdog_timer is not None:
+                watchdog_timer.cancel()
+            _safe_stop()
 
 
 # ---------------------------------------------------------------------------
@@ -583,9 +695,11 @@ if __name__ == "__main__":
     parser.add_argument("--mock", action="store_true", help="Use mock hardware (no RPi needed)")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind (default: 0.0.0.0)")
     parser.add_argument("--port", type=int, default=5000, help="Port (default: 5000)")
+    parser.add_argument("--no-inference", action="store_true", help="Start without inference server")
     args = parser.parse_args()
 
     _mock_mode = args.mock
+    _no_inference = args.no_inference
 
     # Run asyncio (camera + hardware) in a background thread so Flask can
     # use the main thread and its threaded request handlers work normally.
@@ -596,6 +710,10 @@ if __name__ == "__main__":
     # Give the background loop a moment to initialise hardware + camera
     import time as _time
     _time.sleep(3)
+
+    # Start inference connection monitor if inference is enabled
+    if not _no_inference:
+        threading.Thread(target=_inference_monitor, daemon=True, name="inference-monitor").start()
 
     log.info("Car control server starting on http://%s:%d", args.host, args.port)
     app.run(host=args.host, port=args.port, debug=False, threaded=True)

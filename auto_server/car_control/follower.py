@@ -158,13 +158,17 @@ class PersonFollower:
         else:
             with self._lock:
                 self._person_detected = False
+            # Reset EMA so stale position doesn't influence the next detection
+            self._ema_cx = None
+            # Person lost — stop and straighten immediately, don't hold last commands
+            self._safe_stop()
 
-        # person lost for too long → stop
+        # person lost for too long → stop (already stopped above, this is a guard)
         if (now - self._last_seen) > LOST_TIMEOUT_S:
             self._safe_stop()
             return
 
-        # person momentarily absent but within timeout → hold last commands
+        # person momentarily absent but within timeout → already stopped, wait
         if person is None:
             return
 
@@ -248,3 +252,4 @@ class PersonFollower:
                 self._auto.rovno()
         except Exception:
             log.exception("PersonFollower safe_stop error")
+            

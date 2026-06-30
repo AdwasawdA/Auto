@@ -421,7 +421,28 @@
       </div>
     </section>
 
-    <!-- Center: distance + video feed + bb buttons -->
+    <!-- Inference lost popup -->
+  <div id="inference-popup" style="display:none;position:fixed;inset:0;z-index:1000;
+    background:rgba(0,0,0,0.75);align-items:center;justify-content:center;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;
+      padding:32px 40px;max-width:360px;text-align:center;font-family:'Share Tech Mono',monospace;">
+      <div style="font-size:13px;letter-spacing:2px;color:var(--accent);margin-bottom:12px;">
+        ⚠ INFERENCE LOST
+      </div>
+      <div style="font-size:11px;color:var(--dim);letter-spacing:1px;line-height:1.8;margin-bottom:24px;">
+        Connection to the inference server was lost.<br>
+        Person following has been disabled.<br>
+        Waiting for reconnection...
+      </div>
+      <button id="inference-continue-btn" style="
+        background:none;border:1px solid var(--border);border-radius:6px;
+        color:var(--fg);font-family:'Share Tech Mono',monospace;font-size:11px;
+        letter-spacing:2px;padding:10px 24px;cursor:pointer;
+        transition:border-color 0.2s,color 0.2s;">
+        CONTINUE WITHOUT INFERENCE
+      </button>
+    </div>
+  </div>
     <section id="panel-video">
       <div id="dist-display">DIST: <span id="dist-val">—</span> mm &nbsp;|&nbsp; SPEED: <span id="speed-val">—</span> km/h</div>
       <div class="video-wrap" id="video-wrap">
@@ -924,6 +945,33 @@
       videoWrap.style.display  = showData ? 'none' : '';
       gmeterWrap.style.display = showData ? 'flex' : 'none';
     });
+
+    // ── Inference lost popup ─────────────────────────────
+    const inferencePopup = document.getElementById('inference-popup');
+    const inferenceContinueBtn = document.getElementById('inference-continue-btn');
+
+    async function checkInferenceStatus() {
+      try {
+        const r = await fetch('/api/inference-status');
+        const d = await r.json();
+        if (d.inference_lost) {
+          inferencePopup.style.display = 'flex';
+        } else {
+          inferencePopup.style.display = 'none';
+        }
+      } catch(_) {}
+    }
+    setInterval(checkInferenceStatus, 3000);
+
+    inferenceContinueBtn.addEventListener('click', async () => {
+      try {
+        await fetch('/api/inference-continue', { method: 'POST' });
+        inferencePopup.style.display = 'none';
+      } catch(_) {}
+    });
+
+    // ── Heartbeat ping ──────────────────────────────────
+    setInterval(() => send('ping'), 1000);
 
     // ── Init ────────────────────────────────────────────
     connect();
